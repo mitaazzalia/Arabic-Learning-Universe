@@ -1,62 +1,69 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  Award, CheckCircle2, ChevronRight, Compass, Flame, GraduationCap,
-  House, Library, Map, Moon, School, ShoppingBag, Sparkles, Star,
-  Train, Trees, Trophy, Utensils, Waves, HeartPulse, Globe2, Menu, X, Zap,
+  Award, BookOpen, CheckCircle2, ChevronRight, Flame, GraduationCap,
+  HeartPulse, House, Map, MapPinned, Menu, ShoppingBag, Sparkles,
+  TrainFront, Trophy, Trees, X, Zap,
 } from 'lucide-react'
-import { motion } from 'framer-motion'
-import UniverseScene from './components/UniverseScene'
+import type { LucideIcon } from 'lucide-react'
+import CityMap from './components/CityMap'
+import DistrictView from './components/DistrictView'
 import LessonModal from './components/LessonModal'
+import { cityDistricts, extraLessons, type CityArea, type DistrictId } from './data/cityData'
+import { additionalCityLessons } from './data/moreCityLessons'
+import { enrichLessons } from './data/lessonEnrichment'
 import { localLessons } from './data/lessons'
 import { attachQuestionBanks } from './data/questionBanks'
 import { loadLessons } from './lib/lessonRepository'
-import type { DifficultyLevel, GradeLevel, LearningView, Lesson } from './types'
+import type { DifficultyLevel, GradeLevel, Lesson } from './types'
 
-const iconByLesson: Record<string, typeof School> = {
-  school: School,
-  canteen: Utensils,
-  classroom: GraduationCap,
-  library: Library,
+const districtIcons: Record<DistrictId, LucideIcon> = {
+  education: GraduationCap,
+  transport: TrainFront,
+  health: HeartPulse,
   home: House,
-  market: ShoppingBag,
-  mosque: Moon,
-  hospital: HeartPulse,
-  park: Trees,
-  station: Train,
-  restaurant: Utensils,
-  beach: Waves,
+  commerce: ShoppingBag,
+  recreation: Trees,
 }
 
 function App() {
   const [grade, setGrade] = useState<GradeLevel>('SMP')
-  const [view, setView] = useState<LearningView>('universe')
-  const [lessons, setLessons] = useState<Lesson[]>(() => attachQuestionBanks(localLessons))
+  const [lessons, setLessons] = useState<Lesson[]>(() => attachQuestionBanks(enrichLessons([...localLessons, ...extraLessons, ...additionalCityLessons])))
   const [dataSource, setDataSource] = useState<'local' | 'supabase'>('local')
+  const [activeDistrict, setActiveDistrict] = useState<DistrictId | null>(null)
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null)
+  const [currentView, setCurrentView] = useState<'city' | 'progress'>('city')
   const [passedLevels, setPassedLevels] = useState<Record<string, DifficultyLevel[]>>(() => {
     try {
-      const saved = window.localStorage.getItem('alu-v02-progress')
+      const saved = window.localStorage.getItem('alu-city-v04-progress') ?? window.localStorage.getItem('alu-city-v03-progress')
       return saved ? JSON.parse(saved) as Record<string, DifficultyLevel[]> : {}
     } catch {
       return {}
     }
   })
-  const [xp, setXp] = useState(240)
+  const [xp, setXp] = useState(() => {
+    try { return Number(window.localStorage.getItem('alu-city-v04-xp') ?? 0) || 0 } catch { return 0 }
+  })
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   useEffect(() => {
     let mounted = true
     loadLessons().then((result) => {
       if (!mounted) return
-      setLessons(attachQuestionBanks(result.lessons))
+      const allExtras = [...extraLessons, ...additionalCityLessons]
+      const merged = [...result.lessons, ...allExtras.filter((extra) => !result.lessons.some((lesson) => lesson.id === extra.id))]
+      setLessons(attachQuestionBanks(enrichLessons(merged)))
       setDataSource(result.source)
     })
     return () => { mounted = false }
   }, [])
 
   useEffect(() => {
-    window.localStorage.setItem('alu-v02-progress', JSON.stringify(passedLevels))
+    window.localStorage.setItem('alu-city-v04-progress', JSON.stringify(passedLevels))
   }, [passedLevels])
+
+  useEffect(() => {
+    window.localStorage.setItem('alu-city-v04-xp', String(xp))
+  }, [xp])
 
   const completedIds = useMemo(
     () => lessons.filter((lesson) => passedLevels[`${grade}:${lesson.id}`]?.includes('advanced')).map((lesson) => lesson.id),
@@ -76,141 +83,120 @@ function App() {
     setXp((currentXp) => currentXp + Math.max(10, Math.round(score * 0.25)))
   }
 
-  const openView = (nextView: LearningView) => {
-    setView(nextView)
+  const handleSelectDistrict = useCallback((districtId: DistrictId) => {
+    setActiveDistrict(districtId)
+    setCurrentView('city')
+  }, [])
+
+  const handleSelectArea = (area: CityArea) => {
+    const lesson = lessons.find((item) => item.id === area.lessonId)
+    if (lesson) {
+      setSelectedLesson({
+        ...lesson,
+        name: area.name,
+        arabicName: area.arabicName,
+        description: area.description,
+        category: activeDistrictData?.category ?? lesson.category,
+      })
+    }
+  }
+
+  const goToCity = () => {
+    setCurrentView('city')
+    setActiveDistrict(null)
     setMobileNavOpen(false)
   }
 
+  const goToProgress = () => {
+    setCurrentView('progress')
+    setActiveDistrict(null)
+    setMobileNavOpen(false)
+  }
+
+  const activeDistrictData = cityDistricts.find((district) => district.id === activeDistrict) ?? null
+
   return (
-    <div className="app-shell">
-      <aside className={`sidebar ${mobileNavOpen ? 'mobile-open' : ''}`}>
-        <div className="brand-lockup">
-          <div className="brand-mark"><Globe2 size={24} /></div>
-          <div><strong>Arabic Universe</strong><span>LEARNING GALAXY</span></div>
-          <button className="mobile-close icon-button" onClick={() => setMobileNavOpen(false)} type="button" aria-label="Tutup menu"><X size={18} /></button>
+    <div className="city-app-shell">
+      <aside className={`city-sidebar ${mobileNavOpen ? 'mobile-open' : ''}`}>
+        <div className="city-brand">
+          <div className="city-brand-mark"><BookOpen size={23}/><span>ع</span></div>
+          <div><strong>Arabic Learning</strong><small>مدينة اللغة العربية</small></div>
+          <button className="city-icon-button mobile-close" onClick={() => setMobileNavOpen(false)} type="button" aria-label="Tutup menu"><X size={18}/></button>
         </div>
-
-        <div className="sidebar-label">LEARNING SPACE</div>
-        <nav className="sidebar-nav">
-          <button className={view === 'universe' ? 'nav-item active' : 'nav-item'} onClick={() => openView('universe')} type="button">
-            <Compass size={18} /><span>Jelajahi Universe</span><ChevronRight size={15} className="nav-chevron" />
-          </button>
-          <button className={view === 'progress' ? 'nav-item active' : 'nav-item'} onClick={() => openView('progress')} type="button">
-            <Trophy size={18} /><span>Progres Belajar</span><ChevronRight size={15} className="nav-chevron" />
-          </button>
+        <div className="city-sidebar-caption">RUANG BELAJAR</div>
+        <nav className="city-nav">
+          <button className={currentView === 'city' && !activeDistrict ? 'active' : ''} onClick={goToCity} type="button"><MapPinned size={18}/><span>Peta Kota</span><ChevronRight size={15}/></button>
+          <button className={currentView === 'progress' ? 'active' : ''} onClick={goToProgress} type="button"><Trophy size={18}/><span>Progres Belajar</span><ChevronRight size={15}/></button>
         </nav>
-
-        <div className="sidebar-label location-label">YOUR DESTINATIONS</div>
-        <div className="sidebar-destinations">
-          {lessons.slice(0, 5).map((lesson) => {
-            const Icon = iconByLesson[lesson.id] ?? Map
-            return (
-              <button className="destination-link" key={lesson.id} onClick={() => setSelectedLesson(lesson)} type="button">
-                <span className="destination-icon" style={{ color: lesson.color }}><Icon size={15} /></span>
-                <span>{lesson.name}</span>
-                {completedIds.includes(lesson.id) && <CheckCircle2 size={13} className="destination-done" />}
-              </button>
-            )
+        <div className="city-sidebar-caption">JELAJAHI KAWASAN</div>
+        <div className="city-sidebar-districts">
+          {cityDistricts.map((district) => {
+            const Icon = districtIcons[district.id]
+            return <button key={district.id} className={activeDistrict === district.id ? 'selected' : ''} onClick={() => { handleSelectDistrict(district.id); setMobileNavOpen(false) }} type="button"><span className="sidebar-district-icon" style={{ background: `${district.color}22`, color: district.color }}><Icon size={16}/></span><span>{district.name}</span></button>
           })}
         </div>
-
-        <div className="sidebar-bottom">
-          <div className="sidebar-mission">
-            <div className="mission-orbit"><Sparkles size={18} /></div>
-            <strong>Keep exploring!</strong>
-            <p>Satu planet, satu pengalaman Bahasa Arab yang baru.</p>
-            <div className="mission-progress"><span style={{ width: `${progress}%` }} /></div>
-            <small>{completedIds.length} dari {lessons.length} planet selesai</small>
+        <div className="city-sidebar-bottom">
+          <div className="city-mission-card">
+            <div className="mission-top"><span><Sparkles size={16}/></span><strong>Terus menjelajah!</strong></div>
+            <p>Setiap tempat punya cerita dan kosakata baru.</p>
+            <div className="mission-track"><i style={{ width: `${progress}%` }}/></div>
+            <small>{completedIds.length} dari {lessons.length} materi tuntas</small>
           </div>
-          <div className="sidebar-version"><span className="online-dot" /> Prototype v0.2 · {dataSource === 'supabase' ? 'Supabase' : 'Local demo'}</div>
+          <div className="city-data-status"><i/> {dataSource === 'supabase' ? 'Terhubung ke Supabase' : 'Mode demo lokal'} · v0.4</div>
         </div>
       </aside>
 
-      {mobileNavOpen && <button className="mobile-scrim" onClick={() => setMobileNavOpen(false)} type="button" aria-label="Tutup navigasi" />}
+      {mobileNavOpen && <button className="city-mobile-scrim" onClick={() => setMobileNavOpen(false)} type="button" aria-label="Tutup navigasi"/>}
 
-      <main className="main-area">
-        <header className="topbar">
-          <button className="mobile-menu icon-button" onClick={() => setMobileNavOpen(true)} type="button" aria-label="Buka menu"><Menu size={20} /></button>
-          <div className="breadcrumb"><span>Learning Space</span><ChevronRight size={14} /><strong>{view === 'universe' ? 'Universe Explorer' : 'Learning Progress'}</strong></div>
-          <div className="topbar-actions">
-            <div className="grade-switch" aria-label="Pilih jenjang belajar">
-              <button className={grade === 'SMP' ? 'selected' : ''} onClick={() => setGrade('SMP')} type="button">SMP</button>
-              <button className={grade === 'SMA' ? 'selected' : ''} onClick={() => setGrade('SMA')} type="button">SMA</button>
+      <main className="city-main">
+        <header className="city-topbar">
+          <button className="city-icon-button mobile-menu" onClick={() => setMobileNavOpen(true)} type="button" aria-label="Buka menu"><Menu size={20}/></button>
+          <div className="city-breadcrumb"><span>Kota Bahasa Arab</span>{activeDistrictData && <><ChevronRight size={14}/><strong>{activeDistrictData.name}</strong></>}</div>
+          <div className="city-top-actions">
+            <div className="city-grade-switch" aria-label="Pilih jenjang belajar">
+              <button className={grade === 'SMP' ? 'selected' : ''} onClick={() => setGrade('SMP')} type="button">SMP / MTs</button>
+              <button className={grade === 'SMA' ? 'selected' : ''} onClick={() => setGrade('SMA')} type="button">SMA / MA</button>
             </div>
-            <div className="xp-pill"><Zap size={15} fill="currentColor" /><strong>{xp} XP</strong></div>
-            <div className="avatar">P</div>
+            <div className="city-xp"><Zap size={15} fill="currentColor"/><strong>{xp} XP</strong></div>
+            <div className="city-avatar">A</div>
           </div>
         </header>
 
-        <div className="page-content">
-          {view === 'universe' ? (
+        <div className="city-page-content">
+          {currentView === 'progress' ? (
+            <ProgressView lessons={lessons} completedIds={completedIds} progress={progress} xp={xp} onSelect={(lesson) => setSelectedLesson(lesson)}/>
+          ) : activeDistrictData ? (
+            <DistrictView district={activeDistrictData} lessons={lessons} completedIds={completedIds} onBack={() => setActiveDistrict(null)} onSelectArea={handleSelectArea}/>
+          ) : (
             <>
-              <section className="welcome-row">
+              <section className="city-welcome">
                 <div>
-                  <div className="eyebrow"><span className="eyebrow-star">✦</span> PETUALANGAN BELAJAR BAHASA ARAB</div>
-                  <h1>Halo, Penjelajah! <span className="wave">✦</span></h1>
-                  <p>Jelajahi tempat baru, temukan cerita, dan latih kemampuan Bahasa Arabmu.</p>
+                  <div className="city-eyebrow"><span>✦</span> PETUALANGAN BELAJAR BAHASA ARAB</div>
+                  <h1>Selamat datang di <em>Kota Bahasa!</em></h1>
+                  <p>Jelajahi tempat-tempat di sekitar kita. Baca ceritanya, dengarkan percakapannya, dan selesaikan tantangannya.</p>
                 </div>
-                <div className="streak-card"><div className="streak-icon"><Flame size={19} fill="currentColor" /></div><div><strong>3 Hari</strong><span>Learning streak</span></div></div>
+                <div className="city-streak"><span><Flame size={18} fill="currentColor"/></span><div><strong>Mulai hari ini</strong><small>Satu materi, satu kemajuan</small></div></div>
               </section>
-
-              <section className="universe-section">
-                <div className="universe-heading">
-                  <div><span className="section-tag">DUNIA ANIMASI</span><h2>Jelajahi Universe</h2><p>Pilih pulau belajar untuk bertemu cerita dan kosakata baru.</p></div>
-                  <div className="universe-counter"><Globe2 size={16} /><strong>{lessons.length} Planet</strong><span>·</span><span>{completedIds.length} selesai</span></div>
-                </div>
-                <div className="universe-stage">
-                  <div className="stage-glow stage-glow-one" /><div className="stage-glow stage-glow-two" />
-                  <div className="stage-copy"><span>AYO JELAJAHI DUNIA BARU</span><strong>كُلُّ مَكَانٍ قِصَّةٌ جَدِيدَةٌ</strong><small>Setiap tempat punya cerita baru</small></div>
-                  <UniverseScene lessons={lessons} completedIds={completedIds} onSelect={setSelectedLesson} />
-                  <div className="stage-bottom-note"><span className="legend-dot" /> Pilih pulau untuk mulai belajar</div>
-                </div>
+              <section className="city-map-section">
+                <div className="city-section-heading"><div><span className="section-tag">PETA INTERAKTIF</span><h2>Jelajahi seluruh kota</h2><p>Pilih bangunan untuk memperbesar tampilan dan masuk ke kawasannya.</p></div><div className="map-location-count"><Map size={17}/><strong>6 kawasan</strong><span>·</span><span>{lessons.length} materi</span></div></div>
+                <CityMap onSelectDistrict={handleSelectDistrict}/>
               </section>
-
-              <section className="locations-section">
-                <div className="section-row-heading"><div><span className="section-tag">PILIH TEMPAT CERITAMU</span><h2>Temukan Lokasi Belajar</h2></div><span className="location-count">{lessons.length} lokasi tersedia</span></div>
-                <div className="location-grid">
-                  {lessons.map((lesson, index) => {
-                    const Icon = iconByLesson[lesson.id] ?? Map
-                    const completed = completedIds.includes(lesson.id)
-                    return (
-                      <motion.button
-                        className="location-card"
-                        key={lesson.id}
-                        onClick={() => setSelectedLesson(lesson)}
-                        type="button"
-                        whileHover={{ y: -4, scale: 1.015 }}
-                        transition={{ duration: 0.18 }}
-                      >
-                        <div className="location-card-top"><span className="location-card-icon" style={{ color: lesson.color, background: `${lesson.color}18` }}><Icon size={20} /></span><span className="location-number">{String(index + 1).padStart(2, '0')}</span></div>
-                        <strong>{lesson.name}</strong><span className="location-arabic" dir="rtl">{lesson.arabicName}</span>
-                        <p>{lesson.description}</p>
-                        <div className="location-card-bottom"><span>{completed ? <><CheckCircle2 size={13} /> Selesai</> : 'Mulai belajar'}</span><ChevronRight size={16} /></div>
-                      </motion.button>
-                    )
+              <section className="city-quick-districts">
+                <div className="city-section-heading"><div><span className="section-tag">PILIH KAWASAN</span><h2>Mulai dari tempat yang kamu kenal</h2></div></div>
+                <div className="quick-district-grid">
+                  {cityDistricts.map((district) => {
+                    const Icon = districtIcons[district.id]
+                    return <button key={district.id} onClick={() => handleSelectDistrict(district.id)} type="button" className="quick-district-card"><span className="quick-district-icon" style={{ background: `${district.color}22`, color: district.color }}><Icon size={21}/></span><span><strong>{district.name}</strong><small dir="rtl">{district.arabicName}</small></span><ChevronRight size={17}/></button>
                   })}
                 </div>
               </section>
             </>
-          ) : (
-            <ProgressView lessons={lessons} completedIds={completedIds} progress={progress} xp={xp} onSelect={setSelectedLesson} />
           )}
-
-          <footer className="page-footer"><span>عَالَمُ اللُّغَةِ الْعَرَبِيَّةِ</span><span>Learn · Listen · Explore</span></footer>
+          <footer className="city-footer"><span>مَدِينَةُ اللُّغَةِ الْعَرَبِيَّةِ</span><span>اقْرَأْ · اِسْتَمِعْ · تَعَلَّمْ</span></footer>
         </div>
       </main>
 
-      {selectedLesson && (
-        <LessonModal
-          key={`${selectedLesson.id}-${grade}`}
-          lesson={selectedLesson}
-          grade={grade}
-          completed={completedIds.includes(selectedLesson.id)}
-          passedLevels={passedLevels[`${grade}:${selectedLesson.id}`] ?? []}
-          onClose={() => setSelectedLesson(null)}
-          onLevelPassed={recordLevelResult}
-        />
-      )}
+      {selectedLesson && <LessonModal key={`${selectedLesson.id}-${grade}`} lesson={selectedLesson} grade={grade} completed={completedIds.includes(selectedLesson.id)} passedLevels={passedLevels[`${grade}:${selectedLesson.id}`] ?? []} onClose={() => setSelectedLesson(null)} onLevelPassed={recordLevelResult}/>}
     </div>
   )
 }
@@ -218,24 +204,18 @@ function App() {
 function ProgressView({ lessons, completedIds, progress, xp, onSelect }: { lessons: Lesson[]; completedIds: string[]; progress: number; xp: number; onSelect: (lesson: Lesson) => void }) {
   const completedLessons = lessons.filter((lesson) => completedIds.includes(lesson.id))
   return (
-    <div className="progress-page">
-      <div className="eyebrow"><span className="eyebrow-star">✦</span> YOUR LEARNING SUMMARY</div>
-      <h1>Progres Belajarmu</h1>
-      <p className="progress-lead">Pantau perjalananmu dalam menguasai keterampilan membaca dan menyimak Bahasa Arab.</p>
-      <div className="stats-grid">
-        <div className="stat-card"><div className="stat-icon purple"><Trophy size={20} /></div><span>Total XP</span><strong>{xp}</strong><small>Poin pengalaman</small></div>
-        <div className="stat-card"><div className="stat-icon mint"><CheckCircle2 size={20} /></div><span>Planet selesai</span><strong>{completedIds.length}<small> / {lessons.length}</small></strong><small>Lokasi dipelajari</small></div>
-        <div className="stat-card"><div className="stat-icon gold"><Award size={20} /></div><span>Penyelesaian</span><strong>{progress}%</strong><small>Progres keseluruhan</small></div>
+    <section className="city-progress-page">
+      <div className="city-eyebrow"><span>✦</span> RINGKASAN PEMBELAJARAN</div>
+      <h1>Progres belajarmu</h1>
+      <p className="city-progress-lead">Pantau perkembangan keterampilan membaca dan menyimak Bahasa Arab.</p>
+      <div className="city-stat-grid">
+        <article><span className="stat-icon mint"><Zap size={19}/></span><small>Total XP</small><strong>{xp}</strong><p>Poin pengalaman</p></article>
+        <article><span className="stat-icon pink"><CheckCircle2 size={19}/></span><small>Materi tuntas</small><strong>{completedIds.length}<i> / {lessons.length}</i></strong><p>Lokasi yang dipelajari</p></article>
+        <article><span className="stat-icon gold"><Award size={19}/></span><small>Penyelesaian</small><strong>{progress}%</strong><p>Progres keseluruhan</p></article>
       </div>
-      <section className="progress-overview">
-        <div className="progress-overview-heading"><div><span className="section-tag">LEARNING JOURNEY</span><h2>Perjalanan Pembelajaran</h2></div><span className="progress-percent">{progress}%</span></div>
-        <div className="large-progress-track"><span style={{ width: `${progress}%` }} /></div>
-        <p>{completedIds.length === 0 ? 'Belum ada planet yang diselesaikan. Pilih satu lokasi dan mulai petualangan pertamamu.' : `Kamu sudah menyelesaikan ${completedIds.length} dari ${lessons.length} planet. Teruskan eksplorasimu!`}</p>
-      </section>
-      <section className="completed-section"><div className="section-row-heading"><div><span className="section-tag">COMPLETED DESTINATIONS</span><h2>Planet yang Telah Dipelajari</h2></div></div>
-        {completedLessons.length ? <div className="completed-list">{completedLessons.map((lesson) => <button className="completed-item" key={lesson.id} onClick={() => onSelect(lesson)} type="button"><span className="completed-mark"><CheckCircle2 size={18} /></span><span><strong>{lesson.name}</strong><small dir="rtl">{lesson.arabicName}</small></span><ChevronRight size={17} /></button>)}</div> : <div className="empty-progress"><div><Star size={25} /></div><strong>Petualanganmu dimulai di sini</strong><p>Selesaikan kuis dari salah satu planet untuk mencatat progres belajar.</p></div>}
-      </section>
-    </div>
+      <section className="city-progress-panel"><div><span className="section-tag">LEARNING JOURNEY</span><h2>Perjalanan pembelajaran</h2></div><strong>{progress}%</strong><div className="city-progress-track"><i style={{ width: `${progress}%` }}/></div><p>{completedIds.length ? `Kamu telah menuntaskan ${completedIds.length} dari ${lessons.length} materi.` : 'Belum ada materi yang dituntaskan. Pilih kawasan dan mulai petualangan pertamamu.'}</p></section>
+      <section className="city-completed-section"><div className="city-section-heading"><div><span className="section-tag">MATERI SELESAI</span><h2>Daftar pembelajaran</h2></div></div>{completedLessons.length ? <div className="city-completed-list">{completedLessons.map((lesson) => <button key={lesson.id} onClick={() => onSelect(lesson)} type="button"><CheckCircle2 size={18}/><span><strong>{lesson.name}</strong><small dir="rtl">{lesson.arabicName}</small></span><ChevronRight size={16}/></button>)}</div> : <div className="city-empty-progress"><Trophy size={26}/><strong>Perjalananmu dimulai di sini</strong><p>Selesaikan tiga tahap evaluasi untuk menuntaskan satu materi.</p></div>}</section>
+    </section>
   )
 }
 

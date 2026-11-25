@@ -24,6 +24,8 @@ export interface QuizQuestion {
   options: string[]
   answerIndex: number
   explanation: string
+  audioText?: string
+  audioUrl?: string | null
 }
 
 export interface DifficultyQuestionBank {

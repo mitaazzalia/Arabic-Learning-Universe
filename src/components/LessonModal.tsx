@@ -27,6 +27,7 @@ export default function LessonModal({ lesson, grade, completed, passedLevels, on
   const [showTranslation, setShowTranslation] = useState(true)
   const [showTranscript, setShowTranscript] = useState(false)
   const content = grade === 'SMP' ? lesson.smp : lesson.sma
+  const readingWordCount = content.reading.trim().split(/\s+/).length
   const questionBank = lesson.questionBanks?.[grade]
   const selectedQuestions = questionBank?.[selectedDifficulty] ?? (grade === 'SMP' ? lesson.quizSmp : lesson.quizSma)
   const levelIndex = difficultyOrder.indexOf(selectedDifficulty)
@@ -39,12 +40,12 @@ export default function LessonModal({ lesson, grade, completed, passedLevels, on
         <header className="lesson-modal-header">
           <div className="lesson-heading-icon" style={{ background: `${lesson.color}22`, color: lesson.color }}><BookOpen size={23} /></div>
           <div className="lesson-heading-copy">
-            <div className="lesson-kicker">DUNIA BELAJAR · {lesson.category.toUpperCase()}</div>
+            <div className="lesson-kicker">KOTA BELAJAR · {lesson.category.toUpperCase()}</div>
             <h2 id="lesson-title">{lesson.name}</h2>
             <p dir="rtl">{lesson.arabicName}</p>
           </div>
           <div className="lesson-header-right">
-            <span className="grade-chip">Jenjang {grade}</span>
+            <span className="grade-chip">Jenjang {grade === 'SMP' ? 'SMP / MTs' : 'SMA / MA'}</span>
             {completed && <span className="completed-chip"><Check size={13} /> Tuntas</span>}
             <button className="icon-button close-button" onClick={onClose} type="button" aria-label="Tutup materi"><X size={20} /></button>
           </div>
@@ -63,13 +64,23 @@ export default function LessonModal({ lesson, grade, completed, passedLevels, on
             <div className="reading-content">
               <div className="section-eyebrow">MAHĀRAH AL-QIRĀ’AH · KETERAMPILAN MEMBACA</div>
               <h3>اقْرَأِ النَّصَّ بِتَرْكِيزٍ</h3>
-              <p className="section-description">Bacalah cerita berikut dengan saksama. Perhatikan kosakata dan informasi penting di dalam teks.</p>
+              <p className="section-description">Bacalah cerita berikut dengan saksama. Perhatikan kosakata, urutan peristiwa, dan informasi penting di dalam teks.</p>
+              <div className="reading-meta"><span>{grade === 'SMP' ? 'SMP / MTs' : 'SMA / MA'}</span><span>·</span><span>{readingWordCount} kata Arab</span><span>·</span><span>Teks kontekstual</span></div>
               <div className="arabic-reading" dir="rtl" lang="ar">{content.reading}</div>
               <div className="translation-heading">
                 <strong>Terjemahan Bahasa Indonesia</strong>
                 <button className="text-button" onClick={() => setShowTranslation((value) => !value)} type="button">{showTranslation ? 'Sembunyikan' : 'Tampilkan'}</button>
               </div>
               {showTranslation && <p className="translation-box">{content.translation}</p>}
+              <section className="reading-analysis" aria-label="Panduan analisis bacaan">
+                <div className="reading-analysis-heading"><span>LATIHAN ANALISIS</span><strong>Setelah membaca, coba temukan hal-hal berikut.</strong></div>
+                <div className="reading-analysis-grid">
+                  <article><b>01 · Gagasan pokok</b><p>Apa topik utama yang dibahas dalam teks?</p></article>
+                  <article><b>02 · Informasi rinci</b><p>Siapa tokohnya, di mana peristiwa berlangsung, dan kegiatan apa yang dilakukan?</p></article>
+                  <article><b>03 · Urutan peristiwa</b><p>Bagaimana urutan kegiatan dari awal hingga akhir cerita?</p></article>
+                  <article><b>04 · Simpulan</b><p>Pelajaran atau pesan apa yang dapat disimpulkan dari bacaan?</p></article>
+                </div>
+              </section>
               <button className="inline-next" onClick={() => setActiveTab('listening')} type="button">Lanjut ke latihan menyimak <ChevronRight size={16} /></button>
             </div>
           )}
@@ -78,7 +89,7 @@ export default function LessonModal({ lesson, grade, completed, passedLevels, on
             <div className="listening-content">
               <div className="section-eyebrow">MAHĀRAH AL-ISTIMĀ’ · KETERAMPILAN MENYIMAK</div>
               <h3>اِسْتَمِعْ إِلَى النَّصِّ</h3>
-              <p className="section-description">Dengarkan percakapan atau narasi berikut. Pilih kecepatan lambat untuk membantu mengenali bunyi dan kosakata.</p>
+              <p className="section-description">Dengarkan narasi Bahasa Arab yang membacakan teks materi. Coba menyimak tanpa membuka transkrip terlebih dahulu, lalu putar kembali untuk memeriksa pemahaman.</p>
               <AudioPlayer text={content.audioText} audioUrl={grade === 'SMP' ? lesson.audioSmpUrl : lesson.audioSmaUrl} />
               <div className="listening-tip"><Headphones size={17} /><span>Dengarkan satu kali tanpa membaca transkrip. Setelah itu, putar kembali untuk memeriksa pemahamanmu.</span></div>
               <div className="transcript-area">
@@ -148,8 +159,8 @@ export default function LessonModal({ lesson, grade, completed, passedLevels, on
           )}
         </div>
         <footer className="lesson-modal-footer">
-          <span><span className="footer-dot" /> Materi {grade} · {lesson.name}</span>
-          <span>Arabic Learning Universe · v0.2</span>
+          <span><span className="footer-dot" /> Materi {grade === 'SMP' ? 'SMP / MTs' : 'SMA / MA'} · {lesson.name}</span>
+          <span>Arabic Learning City · v0.4</span>
         </footer>
       </section>
     </div>

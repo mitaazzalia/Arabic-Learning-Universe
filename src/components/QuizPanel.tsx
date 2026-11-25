@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { CheckCircle2, LockKeyhole, RotateCcw, Trophy } from 'lucide-react'
 import type { DifficultyLevel, QuizQuestion } from '../types'
+import AudioPlayer from './AudioPlayer'
 import { difficultyLabels } from '../types'
 
 interface QuizPanelProps {
@@ -12,20 +13,37 @@ interface QuizPanelProps {
 const QUESTION_COUNT = 5
 const hasArabic = (value: string) => /[\u0600-\u06FF]/.test(value)
 
+function shuffleQuestions(items: QuizQuestion[]): QuizQuestion[] {
+  const shuffled = items.slice()
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1))
+    ;[shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]]
+  }
+  return shuffled
+}
+
+function shuffleOptions(question: QuizQuestion): QuizQuestion {
+  const options = question.options.map((option, index) => ({ option, correct: index === question.answerIndex }))
+  for (let index = options.length - 1; index > 0; index -= 1) {
+    const swap = Math.floor(Math.random() * (index + 1))
+    ;[options[index], options[swap]] = [options[swap], options[index]]
+  }
+  return { ...question, options: options.map((item) => item.option), answerIndex: options.findIndex((item) => item.correct) }
+}
+
 function chooseSessionQuestions(pool: QuizQuestion[], previousIds: string[] = []): QuizQuestion[] {
   const count = Math.min(QUESTION_COUNT, pool.length)
-  let chosen = pool.slice()
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    chosen = pool.slice()
-    for (let index = chosen.length - 1; index > 0; index -= 1) {
-      const swapIndex = Math.floor(Math.random() * (index + 1))
-      ;[chosen[index], chosen[swapIndex]] = [chosen[swapIndex], chosen[index]]
-    }
-    chosen = chosen.slice(0, count)
+  let chosen: QuizQuestion[] = []
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const reading = shuffleQuestions(pool.filter((item) => item.source === 'qiraah')).slice(0, 2)
+    const listening = shuffleQuestions(pool.filter((item) => item.source === 'istima')).slice(0, 2)
+    const used = new Set([...reading, ...listening].map((item) => item.id))
+    const remaining = shuffleQuestions(pool.filter((item) => !used.has(item.id)))
+    chosen = shuffleQuestions([...reading, ...listening, ...remaining.slice(0, Math.max(0, count - reading.length - listening.length))]).slice(0, count)
     const signature = chosen.map((item) => item.id).sort().join('|')
     if (signature !== previousIds.slice().sort().join('|')) break
   }
-  return chosen
+  return chosen.map(shuffleOptions)
 }
 
 export default function QuizPanel({ questions, difficulty, onComplete }: QuizPanelProps) {
@@ -85,6 +103,7 @@ export default function QuizPanel({ questions, difficulty, onComplete }: QuizPan
             </span>
           </div>
           <h4 dir={hasArabic(question.prompt) ? 'rtl' : 'ltr'} className={`arabic-question ${hasArabic(question.prompt) ? '' : 'question-indonesian'}`}>{question.prompt}</h4>
+          {question.source === 'istima' && <div className="quiz-question-audio"><AudioPlayer compact text={question.audioText ?? question.prompt} audioUrl={question.audioUrl}/></div>}
           <div className="answer-options">
             {question.options.map((option, optionIndex) => {
               const selected = answers[question.id] === optionIndex

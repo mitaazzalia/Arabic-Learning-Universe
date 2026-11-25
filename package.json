@@ -1,7 +1,7 @@
 {
   "name": "arabic-learning-universe",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,8 +10,6 @@
     "typecheck": "tsc -b --pretty"
   },
   "dependencies": {
-    "@react-three/drei": "^10.4.2",
-    "@react-three/fiber": "^9.1.2",
     "@supabase/supabase-js": "^2.50.0",
     "framer-motion": "^12.0.0",
     "lucide-react": "^0.468.0",

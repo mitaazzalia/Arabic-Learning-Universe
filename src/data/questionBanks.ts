@@ -33,7 +33,9 @@ export function buildQuestionBank(lesson: Lesson, grade: GradeLevel, allLessons:
   const otherNames = otherLessons.map((item) => item.name)
   const otherArabicNames = otherLessons.map((item) => item.arabicName)
   const otherDescriptions = otherLessons.map((item) => item.description)
-  const otherTranslations = otherLessons.map((item) => grade === 'SMP' ? item.smp.translation : item.sma.translation)
+  const firstSentence = (value: string) => value.split(/[.!?؟]/).map((part) => part.trim()).filter(Boolean)[0] ?? value
+  const otherTranslations = otherLessons.map((item) => firstSentence(grade === 'SMP' ? item.smp.translation : item.sma.translation))
+  const conciseTranslation = firstSentence(content.translation)
   const allVocabulary = allLessons.flatMap((item) => (grade === 'SMP' ? item.smp : item.sma).vocabulary)
 
   const easy: QuizQuestion[] = []
@@ -72,7 +74,7 @@ export function buildQuestionBank(lesson: Lesson, grade: GradeLevel, allLessons:
     otherDescriptions, `Bacaan berfokus pada konteks ${lesson.name.toLowerCase()}: ${lesson.description.toLowerCase()}`,
   ))
   medium.push(makeQuestion(
-    `${lesson.id}-${grade}-medium-reading-detail`, 'qiraah', 'Ringkasan yang paling sesuai dengan isi bacaan adalah ...', content.translation,
+    `${lesson.id}-${grade}-medium-reading-detail`, 'qiraah', 'Informasi utama pada bagian awal bacaan adalah ...', conciseTranslation,
     otherTranslations, 'Ringkasan ini sesuai dengan informasi pada bacaan yang dipelajari.',
   ))
   medium.push(makeQuestion(
@@ -84,7 +86,7 @@ export function buildQuestionBank(lesson: Lesson, grade: GradeLevel, allLessons:
     otherDescriptions, `Audio dipelajari dalam konteks ${lesson.name.toLowerCase()}.`,
   ))
   medium.push(makeQuestion(
-    `${lesson.id}-${grade}-medium-content-match`, 'qiraah', 'Pernyataan yang paling sesuai dengan materi bacaan adalah ...', content.translation,
+    `${lesson.id}-${grade}-medium-content-match`, 'qiraah', 'Pernyataan yang paling sesuai dengan bacaan adalah ...', conciseTranslation,
     otherTranslations, 'Pernyataan tersebut merangkum informasi utama dari bacaan.',
   ))
   medium.push(makeQuestion(
@@ -107,7 +109,7 @@ export function buildQuestionBank(lesson: Lesson, grade: GradeLevel, allLessons:
     otherDescriptions, `Simpulan harus tetap sesuai dengan konteks dan aktivitas utama dalam bacaan.`,
   ))
   advanced.push(makeQuestion(
-    `${lesson.id}-${grade}-advanced-summary`, 'qiraah', 'Interpretasi yang paling akurat terhadap bacaan adalah ...', content.translation,
+    `${lesson.id}-${grade}-advanced-summary`, 'qiraah', 'Pernyataan yang paling dapat dipertahankan berdasarkan bacaan adalah ...', conciseTranslation,
     otherTranslations, 'Interpretasi ini mempertahankan informasi penting dalam teks.',
   ))
   advanced.push(makeQuestion(
@@ -123,7 +125,7 @@ export function buildQuestionBank(lesson: Lesson, grade: GradeLevel, allLessons:
     otherNames, `Situasi dalam bacaan berlangsung di ${lesson.name.toLowerCase()}.`,
   ))
   advanced.push(makeQuestion(
-    `${lesson.id}-${grade}-advanced-evaluation`, 'qiraah', 'Pernyataan yang paling dapat dipertanggungjawabkan berdasarkan bacaan adalah ...', content.translation,
+    `${lesson.id}-${grade}-advanced-evaluation`, 'qiraah', 'Informasi yang didukung oleh bagian awal bacaan adalah ...', conciseTranslation,
     otherTranslations, 'Jawaban harus didukung oleh informasi yang benar-benar terdapat dalam bacaan.',
   ))
   advanced.push(makeQuestion(
@@ -135,7 +137,16 @@ export function buildQuestionBank(lesson: Lesson, grade: GradeLevel, allLessons:
     otherNames, `Ungkapan dipelajari dalam konteks ${lesson.name.toLowerCase()}.`,
   ))
 
-  return { beginner: easy, intermediate: medium, advanced }
+  const audioUrl = grade === 'SMP' ? lesson.audioSmpUrl : lesson.audioSmaUrl
+  const attachListeningAudio = (items: QuizQuestion[]) => items.map((item) => item.source === 'istima'
+    ? { ...item, audioText: content.audioText, audioUrl: audioUrl ?? null }
+    : item)
+
+  return {
+    beginner: attachListeningAudio(easy),
+    intermediate: attachListeningAudio(medium),
+    advanced: attachListeningAudio(advanced),
+  }
 }
 
 export function attachQuestionBanks(lessons: Lesson[]): Lesson[] {
